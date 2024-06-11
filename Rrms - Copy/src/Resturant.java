@@ -3,56 +3,99 @@ import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.sql.*;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.HashMap;
+import java.util.Map;
+
+
+
+
 
 public class Resturant extends JPanel {
 
     private Connection connection;
+    private Map<Integer, Integer> tableReservationCount;
+
+    // Dark theme colors
+    private Color darkBackground = new Color(34, 34, 34);
+    private Color darkForeground = Color.WHITE;
+    private Color darkButtonBackground = new Color(59, 89, 152);
+    private Color darkButtonForeground = Color.WHITE;
 
     public Resturant(Connection connection) {
         this.connection = connection;
+        this.tableReservationCount = new HashMap<>();
         setLayout(new BorderLayout());
+        setBackground(darkBackground);
 
-        JButton guestButton = new JButton("New Reservation");
-        JButton managerButton = new JButton("Manager Interface");
+        JButton guestButton = createButton("New Reservation");
+        JButton managerButton = createButton("Manager login");
+
 
         guestButton.addActionListener(e -> showGuestForm(0)); // Placeholder table number
         managerButton.addActionListener(e -> showManagerInterface());
 
-        JPanel panel = new JPanel();
-        panel.add(guestButton);
-        panel.add(managerButton);
+        JPanel buttonPanel = new JPanel();
+        buttonPanel.setBackground(darkBackground);
+        buttonPanel.add(guestButton);
+        buttonPanel.add(managerButton);
 
-        add(panel, BorderLayout.NORTH);
+        add(buttonPanel, BorderLayout.NORTH);
 
         createSeatingPlan();
+    }
+
+    private JButton createButton(String text) {
+        JButton button = new JButton(text);
+        button.setBackground(darkButtonBackground);
+        button.setForeground(darkButtonForeground);
+        button.setFocusPainted(false);
+        button.setBorderPainted(false);
+        button.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                button.setBackground(darkButtonBackground.brighter());
+            }
+
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                button.setBackground(darkButtonBackground);
+            }
+        });
+        return button;
     }
 
     private void createSeatingPlan() {
         JPanel seatingPanel = new JPanel(new GridLayout(3, 6, 40, 30));
         seatingPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        seatingPanel.setBackground(darkBackground);
 
         for (int i = 1; i <= 18; i++) {
             try {
                 ImageIcon tableImage = new ImageIcon(getClass().getResource("table.png"));
 
-                JButton tableButton = new JButton("Table " + i, tableImage);
+                JButton tableButton = new JButton(tableImage);
                 tableButton.setPreferredSize(new Dimension(100, 100));
                 tableButton.setFocusPainted(false);
                 tableButton.setContentAreaFilled(false);
+                tableButton.setForeground(darkForeground);
+                tableButton.setHorizontalTextPosition(JButton.CENTER);
+                tableButton.setVerticalTextPosition(JButton.CENTER);
+                tableButton.setText(Integer.toString(i)); // Set the table number as text
 
-                int tableNumber = i;
-                tableButton.addActionListener(e -> {
-                    if (askForReservation(tableNumber)) {
-                        showGuestForm(tableNumber);
-                    } else {
-                        JOptionPane.showMessageDialog(null, "Reservation canceled for Table " + tableNumber);
-                    }
-                });
+                JLabel tableNumberLabel = new JLabel(Integer.toString(i));
+                tableNumberLabel.setForeground(darkForeground);
+                tableNumberLabel.setHorizontalAlignment(JLabel.CENTER);
 
-                seatingPanel.add(tableButton);
+                JPanel tablePanel = new JPanel(new BorderLayout());
+                tablePanel.setOpaque(false);
+                tablePanel.add(tableButton, BorderLayout.CENTER);
+                tablePanel.add(tableNumberLabel, BorderLayout.NORTH);
+
+                addTableButtonListener(tableButton, i);
+
+                seatingPanel.add(tablePanel);
             } catch (Exception ex) {
                 ex.printStackTrace();
                 JOptionPane.showMessageDialog(this, "Error creating table: " + ex.getMessage(), "Table Creation Error", JOptionPane.ERROR_MESSAGE);
@@ -61,6 +104,33 @@ public class Resturant extends JPanel {
         }
 
         add(seatingPanel, BorderLayout.CENTER);
+    }
+
+    private void addTableButtonListener(JButton tableButton, int tableNumber) {
+        tableButton.addActionListener(e -> {
+            if (askForReservation(tableNumber)) {
+                showGuestForm(tableNumber);
+            } else {
+                JOptionPane.showMessageDialog(null, "Reservation canceled for Table " + tableNumber);
+            }
+        });
+
+        // Add hover effect to table buttons
+        tableButton.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                // Scale button size slightly when hovered over
+                tableButton.setPreferredSize(new Dimension(110, 110));
+                tableButton.revalidate();
+                tableButton.repaint();
+            }
+
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                // Restore original button size when mouse exits
+                tableButton.setPreferredSize(new Dimension(100, 100));
+                tableButton.revalidate();
+                tableButton.repaint();
+            }
+        });
     }
 
     private boolean validateManager(String name, String password) {
@@ -77,41 +147,6 @@ public class Resturant extends JPanel {
         return manager.getAuthenticator(name, password);
     }
 
-    private void showLoginDialog() {
-        JFrame loginFrame = new JFrame("Reserve a table");
-        loginFrame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-        loginFrame.setSize(300, 150);
-        loginFrame.setLocationRelativeTo(null);
-
-        JPanel panel = new JPanel(new GridLayout(2, 1));
-
-        JButton managerLoginButton = new JButton("Manager Login");
-        managerLoginButton.addActionListener(e -> {
-            String managerName = JOptionPane.showInputDialog(loginFrame, "Enter Manager Name:");
-            if (managerName != null) {
-                String managerPassword = JOptionPane.showInputDialog(loginFrame, "Enter Manager Password:");
-                if (managerPassword != null) {
-                    if (validateManager(managerName, managerPassword)) {
-                        JOptionPane.showMessageDialog(loginFrame, "Manager login successful");
-                        loginFrame.dispose();
-                        showManagerInterface();
-                    } else {
-                        JOptionPane.showMessageDialog(loginFrame, "Invalid name or password");
-                    }
-                }
-            }
-        });
-
-        JButton guestLoginButton = new JButton("Make a reservation");
-        guestLoginButton.addActionListener(e -> JOptionPane.showMessageDialog(loginFrame, "Please select a table to reserve."));
-
-        panel.add(managerLoginButton);
-        panel.add(guestLoginButton);
-
-        loginFrame.add(panel);
-        loginFrame.setVisible(true);
-    }
-
     private boolean askForReservation(int tableNumber) {
         int option = JOptionPane.showConfirmDialog(null, "Do you want to reserve Table " + tableNumber + "?", "Reservation Confirmation", JOptionPane.YES_NO_OPTION);
         return option == JOptionPane.YES_OPTION;
@@ -122,8 +157,10 @@ public class Resturant extends JPanel {
         guestFrame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         guestFrame.setSize(300, 250);
         guestFrame.setLocationRelativeTo(null);
+        guestFrame.setBackground(darkBackground);
 
         JPanel panel = new JPanel(new GridLayout(8, 2));
+        panel.setBackground(Color.white);
 
         JTextField nameField = new JTextField();
         JTextField emailField = new JTextField();
@@ -132,7 +169,7 @@ public class Resturant extends JPanel {
         JTextField endField = new JTextField();
         JTextField guestsField = new JTextField();
         JTextField tableField = new JTextField(String.valueOf(tableNumber));
-        JButton reserveButton = new JButton("Reserve");
+        JButton reserveButton = createButton("Reserve");
 
         panel.add(new JLabel("Name:"));
         panel.add(nameField);
@@ -140,9 +177,9 @@ public class Resturant extends JPanel {
         panel.add(emailField);
         panel.add(new JLabel("Phone Number:"));
         panel.add(phoneField);
-        panel.add(new JLabel("Reservation Begin (HH:mm):"));
+        panel.add(new JLabel("Begin(HH:mm):"));
         panel.add(beginField);
-        panel.add(new JLabel("Reservation End (HH:mm):"));
+        panel.add(new JLabel("End(HH:mm):"));
         panel.add(endField);
         panel.add(new JLabel("Number of Guests:"));
         panel.add(guestsField);
@@ -152,34 +189,121 @@ public class Resturant extends JPanel {
         panel.add(reserveButton);
 
         reserveButton.addActionListener(e -> {
-            String name = nameField.getText();
-            String email = emailField.getText();
-            String phone = phoneField.getText();
-            String beginTimeString = beginField.getText();
-            String endTimeString = endField.getText();
-            int guests = Integer.parseInt(guestsField.getText());
+            if (validateInput(nameField.getText(), emailField.getText(), phoneField.getText(), beginField.getText(), endField.getText(), guestsField.getText())) {
+                // Check if the reservation falls within the allowed time period
+                LocalTime beginTime = LocalTime.parse(beginField.getText());
+                LocalTime endTime = LocalTime.parse(endField.getText());
+                if (beginTime.isAfter(LocalTime.parse("12:59")) && endTime.isBefore(LocalTime.parse("23:01"))) {
+                    // Check if the reservation duration is at least 2 hours
+                    if (Duration.between(beginTime, endTime).toHours() >= 2) {
+                        // Check if the table is available during the specified time range
+                        if (isTableAvailable(tableNumber, beginField.getText(), endField.getText())) {
+                            makeReservation(nameField.getText(), emailField.getText(), phoneField.getText(), beginField.getText(), endField.getText(), guestsField.getText(), tableNumber);
+                            animateReservation((JButton) e.getSource());
+                            guestFrame.dispose();
 
-            LocalTime beginTime = LocalTime.parse(beginTimeString);
-            LocalTime endTime = LocalTime.parse(endTimeString);
 
-            LocalDateTime beginLocalDateTime = LocalDateTime.of(LocalDate.now(), beginTime);
-            LocalDateTime endLocalDateTime = LocalDateTime.of(LocalDate.now(), endTime);
-
-            Timestamp begin = Timestamp.valueOf(beginLocalDateTime);
-            Timestamp end = Timestamp.valueOf(endLocalDateTime);
-
-            Guest guest = new Guest(0, name, email, phone, begin.toString(), end.toString(), guests, tableNumber);
-            guest.insertGuest();
-
-            Table tableReservation = new Table(tableNumber, name, begin.toString(), end.toString(), guests);
-            tableReservation.insertTableReservation();
-
-            JOptionPane.showMessageDialog(guestFrame, "Reservation for Table " + tableNumber + " made successfully!");
-            guestFrame.dispose();
+                        } else {
+                            JOptionPane.showMessageDialog(guestFrame, "Table " + tableNumber + " is already reserved during the specified time range.");
+                        }
+                    } else {
+                        JOptionPane.showMessageDialog(guestFrame, "Reservation should be at least 2 hours.");
+                    }
+                } else {
+                    JOptionPane.showMessageDialog(guestFrame, "Reservation should be between 13:00 and 23:00.");
+                }
+            } else {
+                JOptionPane.showMessageDialog(guestFrame, "Please fill in all fields correctly.");
+            }
         });
 
         guestFrame.add(panel);
-        guestFrame.setVisible(true);
+        animateFrameOpen(guestFrame);
+    }
+
+    private boolean validateInput(String name, String email, String phone, String beginTime, String endTime, String guests) {
+        return !name.isEmpty() && !email.isEmpty() && !phone.isEmpty() && !beginTime.isEmpty() && !endTime.isEmpty() && !guests.isEmpty();
+    }
+
+    private boolean isTableAvailable(int tableNumber, String beginTime, String endTime) {
+        try {
+            // Convert the provided time strings to LocalDateTime objects
+            LocalDateTime begin = LocalDateTime.of(LocalDate.now(), LocalTime.parse(beginTime));
+            LocalDateTime end = LocalDateTime.of(LocalDate.now(), LocalTime.parse(endTime));
+
+            // Query to check for overlapping reservations
+            PreparedStatement pstmt = connection.prepareStatement(
+                    "SELECT * FROM guests WHERE table_number = ? AND " +
+                            "((begin >= ? AND begin < ?) OR (end > ? AND end <= ?) OR " +
+                            "(begin <= ? AND end >= ?))");
+            pstmt.setInt(1, tableNumber);
+            pstmt.setTimestamp(2, Timestamp.valueOf(begin));
+            pstmt.setTimestamp(3, Timestamp.valueOf(end));
+            pstmt.setTimestamp(4, Timestamp.valueOf(begin));
+            pstmt.setTimestamp(5, Timestamp.valueOf(end));
+            pstmt.setTimestamp(6, Timestamp.valueOf(begin));
+            pstmt.setTimestamp(7, Timestamp.valueOf(end));
+
+            ResultSet rs = pstmt.executeQuery();
+
+            // If there are no overlapping reservations, the table is available
+            return !rs.next();
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false; // Return false in case of any error
+        }
+    }
+
+    private void makeReservation(String name, String email, String phone, String beginTime, String endTime, String guests, int tableNumber) {
+        LocalTime begin = LocalTime.parse(beginTime);
+        LocalTime end = LocalTime.parse(endTime);
+
+        LocalDateTime beginLocalDateTime = LocalDateTime.of(LocalDate.now(), begin);
+        LocalDateTime endLocalDateTime = LocalDateTime.of(LocalDate.now(), end);
+
+        try {
+            PreparedStatement pstmt = connection.prepareStatement("INSERT INTO guests (name, email, phone, begin, end, guests, table_number) VALUES (?, ?, ?, ?, ?, ?, ?)");
+            pstmt.setString(1, name);
+            pstmt.setString(2, email);
+            pstmt.setString(3, phone);
+            pstmt.setTimestamp(4, Timestamp.valueOf(beginLocalDateTime));
+            pstmt.setTimestamp(5, Timestamp.valueOf(endLocalDateTime));
+            pstmt.setInt(6, Integer.parseInt(guests));
+            pstmt.setInt(7, tableNumber);
+            pstmt.executeUpdate();
+
+            JOptionPane.showMessageDialog(null, "Reservation for Table " + tableNumber + " made successfully!");
+            updateTableReservationCount(tableNumber); // Update the reservation count for the table
+            refreshSeatingPlan(); // Refresh the seating plan after making a reservation
+        } catch (SQLException ex) {
+            ex.printStackTrace();
+            JOptionPane.showMessageDialog(null, "Error making reservation: " + ex.getMessage(), "Database Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void updateTableReservationCount(int tableNumber) {
+        tableReservationCount.put(tableNumber, tableReservationCount.getOrDefault(tableNumber, 0) + 1);
+        if (tableReservationCount.get(tableNumber) >= 5) {
+            // Remove the table from the layout if it's reserved 5 times
+            removeTableFromLayout(tableNumber);
+        }
+    }
+
+    private void removeTableFromLayout(int tableNumber) {
+        Component[] components = getComponents();
+        for (Component component : components) {
+            if (component instanceof JPanel) {
+                JPanel tablePanel = (JPanel) component;
+                JLabel tableNumberLabel = (JLabel) tablePanel.getComponent(1);
+                int currentTableNumber = Integer.parseInt(tableNumberLabel.getText());
+                if (currentTableNumber == tableNumber) {
+                    remove(tablePanel);
+                    revalidate();
+                    repaint();
+                    break;
+                }
+            }
+        }
     }
 
     private void showManagerInterface() {
@@ -192,7 +316,7 @@ public class Resturant extends JPanel {
 
         JTextField managerNameField = new JTextField();
         JTextField managerPasswordField = new JPasswordField();
-        JButton loginButton = new JButton("Login");
+        JButton loginButton = createButton("Login");
 
         loginButton.addActionListener(e -> {
             String managerName = managerNameField.getText();
@@ -214,7 +338,7 @@ public class Resturant extends JPanel {
         panel.add(loginButton);
 
         managerLoginFrame.add(panel);
-        managerLoginFrame.setVisible(true);
+        animateFrameOpen(managerLoginFrame);
     }
 
     private void showManagerDashboard() {
@@ -239,8 +363,8 @@ public class Resturant extends JPanel {
         }
 
         JPanel buttonPanel = new JPanel();
-        JButton editButton = new JButton("Edit");
-        JButton deleteButton = new JButton("Delete");
+        JButton editButton = createButton("Edit");
+        JButton deleteButton = createButton("Delete");
 
         editButton.addActionListener(e -> {
             int selectedRow = reservationTable.getSelectedRow();
@@ -258,7 +382,6 @@ public class Resturant extends JPanel {
                 int guestId = (int) reservationTable.getValueAt(selectedRow, 0);
                 int tableNumber = (int) reservationTable.getValueAt(selectedRow, 6); // Assuming table number is in the 7th column
                 deleteReservation(guestId, tableNumber);
-                refreshReservationTable(); // Refresh the reservation table after deletion
             } else {
                 JOptionPane.showMessageDialog(managerFrame, "Please select a reservation to delete.");
             }
@@ -270,7 +393,7 @@ public class Resturant extends JPanel {
         panel.add(buttonPanel, BorderLayout.SOUTH);
 
         managerFrame.add(panel);
-        managerFrame.setVisible(true);
+        animateFrameOpen(managerFrame);
     }
 
     private void showEditReservationForm(int guestId) {
@@ -288,7 +411,7 @@ public class Resturant extends JPanel {
         JTextField endField = new JTextField();
         JTextField guestsField = new JTextField();
         JTextField tableField = new JTextField();
-        JButton saveButton = new JButton("Save");
+        JButton saveButton = createButton("Save");
 
         try {
             PreparedStatement pstmt = connection.prepareStatement("SELECT * FROM guests WHERE id = ?");
@@ -364,7 +487,7 @@ public class Resturant extends JPanel {
         });
 
         editFrame.add(panel);
-        editFrame.setVisible(true);
+        animateFrameOpen(editFrame);
     }
 
     private void deleteReservation(int guestId, int tableNumber) {
@@ -374,30 +497,60 @@ public class Resturant extends JPanel {
             pstmt1.setInt(1, guestId);
             pstmt1.executeUpdate();
 
-            // Next, delete from the tables table
-            PreparedStatement pstmt2 = connection.prepareStatement("DELETE FROM tables WHERE table_number = ? AND costumer_name = ?");
-            pstmt2.setInt(1, tableNumber);
-            pstmt2.setInt(2, guestId);
-            pstmt2.executeUpdate();
-
             JOptionPane.showMessageDialog(null, "Reservation deleted successfully!");
+            updateTableReservationCount(tableNumber); // Update the reservation count for the table
+            refreshSeatingPlan(); // Refresh the seating plan after deleting a reservation
         } catch (SQLException e) {
             e.printStackTrace();
             JOptionPane.showMessageDialog(null, "Error deleting reservation: " + e.getMessage(), "Database Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 
+    private void refreshSeatingPlan() {
+        // Remove all components from the seating panel and recreate the seating plan
+        remove(1); // Index 1 corresponds to the seating panel
+        createSeatingPlan();
+        revalidate();
+        repaint();
+    }
 
-    private void refreshReservationTable() {
-        try {
-            Statement stmt = connection.createStatement(ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_READ_ONLY);
-            ResultSet rs = stmt.executeQuery("SELECT * FROM guests");
-            JTable reservationTable = new JTable(new ResultSetTableModel(rs));
-            JScrollPane scrollPane = new JScrollPane(reservationTable);
-            JOptionPane.showMessageDialog(null, scrollPane, "Reservations", JOptionPane.PLAIN_MESSAGE);
-        } catch (SQLException e) {
-            e.printStackTrace();
-            JOptionPane.showMessageDialog(null, "Error fetching reservations: " + e.getMessage(), "Database Error", JOptionPane.ERROR_MESSAGE);
+    private void animateFrameOpen(JFrame frame) {
+        if (!frame.isUndecorated()) { // Check if the frame is decorated
+            frame.setVisible(true); // If decorated, just make it visible without opacity animation
+            return;
         }
+
+        // Fade in animation for undecorated frames
+        frame.setOpacity(0.0f);
+        frame.setVisible(true);
+
+        Timer fadeInTimer = new Timer(20, new ActionListener() {
+            float opacity = 0.0f;
+
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                opacity += 0.05f;
+                frame.setOpacity(Math.min(opacity, 1.0f));
+                if (opacity >= 1.0f) {
+                    ((Timer) e.getSource()).stop();
+                }
+            }
+        });
+        fadeInTimer.start();
+    }
+
+    private void animateReservation(JButton button) {
+        // Blink animation for reservation button
+        Timer blinkTimer = new Timer(200, new ActionListener() {
+            boolean isVisible = true;
+
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                isVisible = !isVisible;
+                button.setVisible(isVisible);
+            }
+        });
+        blinkTimer.setRepeats(false);
+        blinkTimer.start();
     }
 }
