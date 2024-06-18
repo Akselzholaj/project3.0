@@ -19,10 +19,10 @@ public class Resturant extends JPanel {
 
 
     // Dark theme colors
-    private Color darkBackground = new Color(34, 34, 34);
-    private Color darkForeground = Color.WHITE;
-    private Color darkButtonBackground = new Color(59, 89, 152);
-    private Color darkButtonForeground = Color.WHITE;
+    private Color darkBackground = new Color(255, 255, 255);
+    private Color darkForeground = Color.BLACK;
+    private Color darkButtonBackground = new Color( 196, 164, 132 );
+    private Color darkButtonForeground = Color.BLACK;
 
     public Resturant(Connection connection) {
         this.connection = connection;
@@ -41,7 +41,6 @@ public class Resturant extends JPanel {
         buttonPanel.setBackground(darkBackground);
         buttonPanel.add(guestButton);
         buttonPanel.add(managerButton);
-
         add(buttonPanel, BorderLayout.NORTH);
 
         createSeatingPlan();
@@ -81,7 +80,7 @@ public class Resturant extends JPanel {
                 tableButton.setForeground(darkForeground);
                 tableButton.setHorizontalTextPosition(JButton.CENTER);
                 tableButton.setVerticalTextPosition(JButton.CENTER);
-                tableButton.setText(Integer.toString(i)); // Set the table number as text
+
 
                 JLabel tableNumberLabel = new JLabel(Integer.toString(i));
                 tableNumberLabel.setForeground(darkForeground);
@@ -176,9 +175,9 @@ public class Resturant extends JPanel {
         panel.add(emailField);
         panel.add(new JLabel("Phone Number:"));
         panel.add(phoneField);
-        panel.add(new JLabel("Begin(HH:mm):"));
+        panel.add(new JLabel("Begin(hh:mm):"));
         panel.add(beginField);
-        panel.add(new JLabel("End(HH:mm):"));
+        panel.add(new JLabel("End(hh:mm):"));
         panel.add(endField);
         panel.add(new JLabel("Number of Guests:"));
         panel.add(guestsField);
@@ -259,7 +258,6 @@ public class Resturant extends JPanel {
 
         LocalDateTime beginLocalDateTime = LocalDateTime.of(LocalDate.now(), begin);
         LocalDateTime endLocalDateTime = LocalDateTime.of(LocalDate.now(), end);
-        updateTableReservationCount(tableNumber);
 
         try {
             PreparedStatement pstmt = connection.prepareStatement("INSERT INTO guests (name, email, phone, begin, end, guests, table_number) VALUES (?, ?, ?, ?, ?, ?, ?)");
@@ -282,10 +280,8 @@ public class Resturant extends JPanel {
     }
 
     private void updateTableReservationCount(int tableNumber) {
-        int reservationCount = tableReservationCount.getOrDefault(tableNumber, 0) + 1;
-        tableReservationCount.put(tableNumber, reservationCount);
-
-        if (reservationCount >= 5) {
+        tableReservationCount.put(tableNumber, tableReservationCount.getOrDefault(tableNumber, 0) + 1);
+        if (tableReservationCount.get(tableNumber) >= 5) {
             // Remove the table from the layout if it's reserved 5 times
             removeTableFromLayout(tableNumber);
         }
@@ -371,7 +367,6 @@ public class Resturant extends JPanel {
         JButton deleteButton = createButton("Delete");
         JButton refreshButton = createButton("Refresh");
 
-
         editButton.addActionListener(e -> {
             int selectedRow = reservationTable.getSelectedRow();
             if (selectedRow >= 0) {
@@ -392,12 +387,18 @@ public class Resturant extends JPanel {
                 JOptionPane.showMessageDialog(managerFrame, "Please select a reservation to delete.");
             }
         });
+        refreshButton.addActionListener(e -> refreshSeatingPlan());
 
-        refreshButton.addActionListener(e -> refreshSeatingPlan()); // Action for refreshing the seating plan
-
-// Set the background color of the refresh button to match the dark theme
         refreshButton.setBackground(darkButtonBackground);
 
+        buttonPanel.add(refreshButton);
+        buttonPanel.add(editButton);
+        buttonPanel.add(deleteButton);
+
+        panel.add(buttonPanel, BorderLayout.SOUTH);
+
+        managerFrame.add(panel);
+        animateFrameOpen(managerFrame);
         buttonPanel.add(refreshButton);
         buttonPanel.add(editButton);
         buttonPanel.add(deleteButton);
@@ -524,8 +525,6 @@ public class Resturant extends JPanel {
         createSeatingPlan();
         revalidate();
         repaint();
-
-        // Refresh the data in the JTable of the manager interface
         refreshReservationTable();
     }
 
