@@ -11,13 +11,12 @@ import java.util.HashMap;
 import java.util.Map;
 
 
-
-
-
 public class Resturant extends JPanel {
 
     private Connection connection;
     private Map<Integer, Integer> tableReservationCount;
+    private JTable reservationTable;// Declaration of reservationTable
+
 
     // Dark theme colors
     private Color darkBackground = new Color(34, 34, 34);
@@ -260,6 +259,7 @@ public class Resturant extends JPanel {
 
         LocalDateTime beginLocalDateTime = LocalDateTime.of(LocalDate.now(), begin);
         LocalDateTime endLocalDateTime = LocalDateTime.of(LocalDate.now(), end);
+        updateTableReservationCount(tableNumber);
 
         try {
             PreparedStatement pstmt = connection.prepareStatement("INSERT INTO guests (name, email, phone, begin, end, guests, table_number) VALUES (?, ?, ?, ?, ?, ?, ?)");
@@ -282,8 +282,10 @@ public class Resturant extends JPanel {
     }
 
     private void updateTableReservationCount(int tableNumber) {
-        tableReservationCount.put(tableNumber, tableReservationCount.getOrDefault(tableNumber, 0) + 1);
-        if (tableReservationCount.get(tableNumber) >= 5) {
+        int reservationCount = tableReservationCount.getOrDefault(tableNumber, 0) + 1;
+        tableReservationCount.put(tableNumber, reservationCount);
+
+        if (reservationCount >= 5) {
             // Remove the table from the layout if it's reserved 5 times
             removeTableFromLayout(tableNumber);
         }
@@ -349,7 +351,9 @@ public class Resturant extends JPanel {
 
         JPanel panel = new JPanel(new BorderLayout());
 
-        JTable reservationTable = new JTable();
+        // Initialize reservationTable
+        reservationTable = new JTable();
+
         JScrollPane scrollPane = new JScrollPane(reservationTable);
         panel.add(scrollPane, BorderLayout.CENTER);
 
@@ -365,6 +369,8 @@ public class Resturant extends JPanel {
         JPanel buttonPanel = new JPanel();
         JButton editButton = createButton("Edit");
         JButton deleteButton = createButton("Delete");
+        JButton refreshButton = createButton("Refresh");
+
 
         editButton.addActionListener(e -> {
             int selectedRow = reservationTable.getSelectedRow();
@@ -387,6 +393,12 @@ public class Resturant extends JPanel {
             }
         });
 
+        refreshButton.addActionListener(e -> refreshSeatingPlan()); // Action for refreshing the seating plan
+
+// Set the background color of the refresh button to match the dark theme
+        refreshButton.setBackground(darkButtonBackground);
+
+        buttonPanel.add(refreshButton);
         buttonPanel.add(editButton);
         buttonPanel.add(deleteButton);
 
@@ -512,6 +524,21 @@ public class Resturant extends JPanel {
         createSeatingPlan();
         revalidate();
         repaint();
+
+        // Refresh the data in the JTable of the manager interface
+        refreshReservationTable();
+    }
+
+    private void refreshReservationTable() {
+        // Retrieve the data from the database and update the JTable
+        try {
+            Statement stmt = connection.createStatement(ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_READ_ONLY);
+            ResultSet rs = stmt.executeQuery("SELECT * FROM guests");
+            reservationTable.setModel(new ResultSetTableModel(rs));
+        } catch (SQLException e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(null, "Error fetching reservations: " + e.getMessage(), "Database Error", JOptionPane.ERROR_MESSAGE);
+        }
     }
 
     private void animateFrameOpen(JFrame frame) {
