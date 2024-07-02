@@ -9,30 +9,35 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.HashMap;
 import java.util.Map;
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+import java.awt.Graphics2D;
+import java.awt.geom.Ellipse2D;
+import java.io.IOException;
 
 
 public class Resturant extends JPanel {
 
     private Connection connection;
     private Map<Integer, Integer> tableReservationCount;
-    private JTable reservationTable;// Declaration of reservationTable
+    private JTable reservationTable; // Declaration of reservationTable
+    //private JTable reservationTable;
 
-
-    // Dark theme colors
+    // colors
     private Color darkBackground = new Color(255, 255, 255);
     private Color darkForeground = Color.BLACK;
-    private Color darkButtonBackground = new Color( 196, 164, 132 );
+    private Color darkButtonBackground = new Color(196, 164, 132);
     private Color darkButtonForeground = Color.BLACK;
 
     public Resturant(Connection connection) {
         this.connection = connection;
         this.tableReservationCount = new HashMap<>();
+        this.reservationTable = new JTable();
         setLayout(new BorderLayout());
         setBackground(darkBackground);
 
         JButton guestButton = createButton("New Reservation");
         JButton managerButton = createButton("Manager login");
-
 
         guestButton.addActionListener(e -> showGuestForm(0)); // Placeholder table number
         managerButton.addActionListener(e -> showManagerInterface());
@@ -65,45 +70,98 @@ public class Resturant extends JPanel {
     }
 
     private void createSeatingPlan() {
+        JPanel mainPanel = new JPanel(new BorderLayout()) {
+            @Override
+            protected void paintComponent(Graphics g) {
+                super.paintComponent(g);
+                // Load background image
+                try {
+                    BufferedImage backgroundImage = ImageIO.read(getClass().getResource("bac.jpg"));
+                    // Scale the background image to fit the panel
+                    g.drawImage(backgroundImage, 0, 0, getWidth(), getHeight(), this);
+                } catch (IOException ex) {
+                    ex.printStackTrace();
+                    // Handle image loading error
+                }
+            }
+        };
+
+        mainPanel.setBackground(darkBackground); // Set background color for mainPanel
+
         JPanel seatingPanel = new JPanel(new GridLayout(3, 6, 40, 30));
-        seatingPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-        seatingPanel.setBackground(darkBackground);
+        seatingPanel.setBorder(BorderFactory.createEmptyBorder(18, 10, 10, 10));
+        seatingPanel.setOpaque(false); // Make seating panel transparent
 
         for (int i = 1; i <= 18; i++) {
             try {
-                ImageIcon tableImage = new ImageIcon(getClass().getResource("table.png"));
+                BufferedImage tableImage = ImageIO.read(getClass().getResource("table.png"));
+                tableImage = getScaledCircularImage(tableImage, 140); // Change size here
 
-                JButton tableButton = new JButton(tableImage);
-                tableButton.setPreferredSize(new Dimension(100, 100));
+                ImageIcon tableIcon = new ImageIcon(tableImage);
+                JButton tableButton = new JButton(tableIcon);
+                tableButton.setPreferredSize(new Dimension(140, 140)); // Change size here
                 tableButton.setFocusPainted(false);
                 tableButton.setContentAreaFilled(false);
+                tableButton.setBorderPainted(false);
                 tableButton.setForeground(darkForeground);
                 tableButton.setHorizontalTextPosition(JButton.CENTER);
                 tableButton.setVerticalTextPosition(JButton.CENTER);
 
-
                 JLabel tableNumberLabel = new JLabel(Integer.toString(i));
-                tableNumberLabel.setForeground(darkForeground);
+                tableNumberLabel.setForeground(new Color(224,224,224)); // Set color of numbers
                 tableNumberLabel.setHorizontalAlignment(JLabel.CENTER);
+                tableNumberLabel.setFont(new Font("SansSerif", Font.BOLD, 16)); // Example: Font size 16, bold
 
                 JPanel tablePanel = new JPanel(new BorderLayout());
-                tablePanel.setOpaque(false);
+                tablePanel.setOpaque(false); // Make table panel transparent
                 tablePanel.add(tableButton, BorderLayout.CENTER);
                 tablePanel.add(tableNumberLabel, BorderLayout.NORTH);
 
                 addTableButtonListener(tableButton, i);
 
                 seatingPanel.add(tablePanel);
-            } catch (Exception ex) {
+            } catch (IOException ex) {
                 ex.printStackTrace();
                 JOptionPane.showMessageDialog(this, "Error creating table: " + ex.getMessage(), "Table Creation Error", JOptionPane.ERROR_MESSAGE);
                 return;
             }
         }
 
-        add(seatingPanel, BorderLayout.CENTER);
+        mainPanel.add(seatingPanel, BorderLayout.CENTER);
+        add(mainPanel, BorderLayout.CENTER);
     }
 
+    private BufferedImage getScaledCircularImage(BufferedImage image, int size) {
+        BufferedImage resizedImage = new BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g2 = resizedImage.createGraphics();
+
+        // Calculate the scaling factor to fit the image into the circle
+        double scaleFactor = Math.min(1.0 * size / image.getWidth(), 1.0 * size / image.getHeight());
+
+        // Calculate new width and height for the scaled image
+        int scaledWidth = (int) (image.getWidth() * scaleFactor);
+        int scaledHeight = (int) (image.getHeight() * scaleFactor);
+
+        // Calculate position to center the image in the resized circle
+        int xPos = (size - scaledWidth) / 2;
+        int yPos = (size - scaledHeight) / 2;
+
+        // Create a clipping region for the circular shape
+        Ellipse2D.Double clip = new Ellipse2D.Double(xPos, yPos, scaledWidth, scaledHeight);
+        g2.setClip(clip);
+
+        // Draw the scaled image centered within the circular shape
+        g2.drawImage(image, xPos, yPos, scaledWidth, scaledHeight, null);
+
+        // Add a border around the circular image
+        g2.setColor(new Color(196, 164, 132));
+        g2.setStroke(new BasicStroke(4)); // Adjust border thickness as needed
+        g2.drawOval(xPos, yPos, scaledWidth, scaledHeight); // Draw oval border just inside the boundary
+
+        g2.dispose();
+
+        return resizedImage;
+    }
     private void addTableButtonListener(JButton tableButton, int tableNumber) {
         tableButton.addActionListener(e -> {
             if (askForReservation(tableNumber)) {
@@ -117,20 +175,18 @@ public class Resturant extends JPanel {
         tableButton.addMouseListener(new java.awt.event.MouseAdapter() {
             public void mouseEntered(java.awt.event.MouseEvent evt) {
                 // Scale button size slightly when hovered over
-                tableButton.setPreferredSize(new Dimension(110, 110));
+                tableButton.setPreferredSize(new Dimension(160, 160)); // Change hover size here
                 tableButton.revalidate();
                 tableButton.repaint();
             }
-
             public void mouseExited(java.awt.event.MouseEvent evt) {
                 // Restore original button size when mouse exits
-                tableButton.setPreferredSize(new Dimension(100, 100));
+                tableButton.setPreferredSize(new Dimension(120, 120)); // Change original size here
                 tableButton.revalidate();
                 tableButton.repaint();
             }
         });
     }
-
     private boolean validateManager(String name, String password) {
         try {
             if (!connection.isValid(5)) {
@@ -153,9 +209,10 @@ public class Resturant extends JPanel {
     private void showGuestForm(int tableNumber) {
         JFrame guestFrame = new JFrame("Guest Details");
         guestFrame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-        guestFrame.setSize(300, 250);
+        guestFrame.setSize(350, 250);
         guestFrame.setLocationRelativeTo(null);
         guestFrame.setBackground(darkBackground);
+        guestFrame.setResizable(false);
 
         JPanel panel = new JPanel(new GridLayout(8, 2));
         panel.setBackground(Color.white);
@@ -188,6 +245,11 @@ public class Resturant extends JPanel {
 
         reserveButton.addActionListener(e -> {
             if (validateInput(nameField.getText(), emailField.getText(), phoneField.getText(), beginField.getText(), endField.getText(), guestsField.getText())) {
+                int numberOfGuests = Integer.parseInt(guestsField.getText());
+                if (numberOfGuests > 6) {
+                    JOptionPane.showMessageDialog(guestFrame, "The maximum number of guests per table is 6. Please reduce the number of guests.");
+                    return;
+                }
                 // Check if the reservation falls within the allowed time period
                 LocalTime beginTime = LocalTime.parse(beginField.getText());
                 LocalTime endTime = LocalTime.parse(endField.getText());
@@ -199,8 +261,6 @@ public class Resturant extends JPanel {
                             makeReservation(nameField.getText(), emailField.getText(), phoneField.getText(), beginField.getText(), endField.getText(), guestsField.getText(), tableNumber);
                             animateReservation((JButton) e.getSource());
                             guestFrame.dispose();
-
-
                         } else {
                             JOptionPane.showMessageDialog(guestFrame, "Table " + tableNumber + " is already reserved during the specified time range.");
                         }
@@ -307,10 +367,11 @@ public class Resturant extends JPanel {
     private void showManagerInterface() {
         JFrame managerLoginFrame = new JFrame("Manager Login");
         managerLoginFrame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-        managerLoginFrame.setSize(300, 150);
+        managerLoginFrame.setSize(350, 150);
         managerLoginFrame.setLocationRelativeTo(null);
+        managerLoginFrame.setResizable(false);
 
-        JPanel panel = new JPanel(new GridLayout(3, 1));
+        JPanel panel = new JPanel(new GridLayout(3, 2));
 
         JTextField managerNameField = new JTextField();
         JTextField managerPasswordField = new JPasswordField();
@@ -342,8 +403,9 @@ public class Resturant extends JPanel {
     private void showManagerDashboard() {
         JFrame managerFrame = new JFrame("Manager Interface");
         managerFrame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-        managerFrame.setSize(600, 400);
+        managerFrame.setSize(700, 500);
         managerFrame.setLocationRelativeTo(null);
+        managerFrame.setResizable(false);
 
         JPanel panel = new JPanel(new BorderLayout());
 
@@ -356,7 +418,27 @@ public class Resturant extends JPanel {
         try {
             Statement stmt = connection.createStatement(ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_READ_ONLY);
             ResultSet rs = stmt.executeQuery("SELECT * FROM guests");
+
+            int totalReservations = 0;
+            int totalGuests = 0;
+
+            while (rs.next()) {
+                totalReservations++;
+                totalGuests += rs.getInt("guests");
+            }
+
+            JLabel totalReservationsLabel = new JLabel("Total Reservations: " + totalReservations);
+            JLabel totalGuestsLabel = new JLabel("Total Guests: " + totalGuests);
+
+            JPanel statsPanel = new JPanel(new GridLayout(1, 2));
+            statsPanel.add(totalReservationsLabel);
+            statsPanel.add(totalGuestsLabel);
+
+            panel.add(statsPanel, BorderLayout.NORTH);
+
+            // Update the JTable model with the fetched data
             reservationTable.setModel(new ResultSetTableModel(rs));
+
         } catch (SQLException e) {
             e.printStackTrace();
             JOptionPane.showMessageDialog(managerFrame, "Error fetching reservations: " + e.getMessage(), "Database Error", JOptionPane.ERROR_MESSAGE);
@@ -383,22 +465,19 @@ public class Resturant extends JPanel {
                 int guestId = (int) reservationTable.getValueAt(selectedRow, 0);
                 int tableNumber = (int) reservationTable.getValueAt(selectedRow, 6); // Assuming table number is in the 7th column
                 deleteReservation(guestId, tableNumber);
+
+                // After deletion, update total reservations and guests counts
+                refreshReservationStatistics(managerFrame);
             } else {
                 JOptionPane.showMessageDialog(managerFrame, "Please select a reservation to delete.");
             }
         });
-        refreshButton.addActionListener(e -> refreshSeatingPlan());
 
-        refreshButton.setBackground(darkButtonBackground);
+        refreshButton.addActionListener(e -> {
+            refreshSeatingPlan();
+            refreshReservationStatistics(managerFrame);
+        });
 
-        buttonPanel.add(refreshButton);
-        buttonPanel.add(editButton);
-        buttonPanel.add(deleteButton);
-
-        panel.add(buttonPanel, BorderLayout.SOUTH);
-
-        managerFrame.add(panel);
-        animateFrameOpen(managerFrame);
         buttonPanel.add(refreshButton);
         buttonPanel.add(editButton);
         buttonPanel.add(deleteButton);
@@ -409,6 +488,33 @@ public class Resturant extends JPanel {
         animateFrameOpen(managerFrame);
     }
 
+    private void refreshReservationStatistics(JFrame managerFrame) {
+        try {
+            Statement stmt = connection.createStatement();
+            ResultSet rs = stmt.executeQuery("SELECT COUNT(*) AS totalReservations, SUM(guests) AS totalGuests FROM guests");
+
+            if (rs.next()) {
+                int totalReservations = rs.getInt("totalReservations");
+                int totalGuests = rs.getInt("totalGuests");
+
+                // Update labels with new values
+                Component[] components = ((JPanel) managerFrame.getContentPane().getComponent(0)).getComponents();
+                for (Component component : components) {
+                    if (component instanceof JPanel) {
+                        JPanel statsPanel = (JPanel) component;
+                        JLabel totalReservationsLabel = (JLabel) statsPanel.getComponent(0); // Assuming total reservations label is first
+                        JLabel totalGuestsLabel = (JLabel) statsPanel.getComponent(1); // Assuming total guests label is second
+                        totalReservationsLabel.setText("Total Reservations: " + totalReservations);
+                        totalGuestsLabel.setText("Total Guests: " + totalGuests);
+                        break;
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(managerFrame, "Error refreshing statistics: " + e.getMessage(), "Database Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
     private void showEditReservationForm(int guestId) {
         JFrame editFrame = new JFrame("Edit Reservation");
         editFrame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
@@ -532,7 +638,7 @@ public class Resturant extends JPanel {
         // Retrieve the data from the database and update the JTable
         try {
             Statement stmt = connection.createStatement(ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_READ_ONLY);
-            ResultSet rs = stmt.executeQuery("SELECT * FROM guests");
+            ResultSet rs = stmt.executeQuery("SELECT * FROM guests"); // Ensure the correct table is queried
             reservationTable.setModel(new ResultSetTableModel(rs));
         } catch (SQLException e) {
             e.printStackTrace();
@@ -579,4 +685,5 @@ public class Resturant extends JPanel {
         blinkTimer.setRepeats(false);
         blinkTimer.start();
     }
+
 }
