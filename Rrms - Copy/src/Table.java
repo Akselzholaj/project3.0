@@ -10,13 +10,13 @@ public class Table {
     private int numberOfGuests;
     private int reservationCount;
 
-    public Table(int tableNumber, String guestName, String beginTime, String endTime, int numberOfGuests) {
+    public Table(int tableNumber, String guestName, String beginTime, String endTime, int numberOfGuests, int reservationCount) {
         this.tableNumber = tableNumber;
         this.guestName = guestName;
         this.beginTime = beginTime;
         this.endTime = endTime;
         this.numberOfGuests = numberOfGuests;
-        this.reservationCount = 0; // Initialize reservation count to zero
+        this.reservationCount = reservationCount; // Initialize reservation count
     }
 
     // Getters and setters
@@ -72,14 +72,21 @@ public class Table {
 
     // Method to insert a reservation into the database
     public void insertReservation() {
-        try (Connection connection = DriverManager.getConnection("jdbc:mysql://localhost:3306/sakila", "root", "admin")) {
-            String query = "INSERT INTO tables (table_number, guest_name, begin_time, end_time, number_of_guests) VALUES (?, ?, ?, ?, ?)";
+        try (Connection connection = getConnection()) {
+            // Check if the table is already fully booked
+            if (isFullyBooked()) {
+                System.out.println("Table " + tableNumber + " is fully booked. Cannot add more reservations.");
+                return;
+            }
+
+            String query = "INSERT INTO tables (table_number, guest_name, begin_time, end_time, number_of_guests, reservation_count) VALUES (?, ?, ?, ?, ?, ?)";
             try (PreparedStatement preparedStatement = connection.prepareStatement(query)) {
                 preparedStatement.setInt(1, tableNumber);
                 preparedStatement.setString(2, guestName);
                 preparedStatement.setString(3, beginTime);
                 preparedStatement.setString(4, endTime);
                 preparedStatement.setInt(5, numberOfGuests);
+                preparedStatement.setInt(6, reservationCount + 1); // Increment reservation count
                 int rowsAffected = preparedStatement.executeUpdate();
                 if (rowsAffected > 0) {
                     System.out.println("Table reservation inserted successfully.");
@@ -95,14 +102,15 @@ public class Table {
 
     // Method to update a reservation in the database
     public void updateReservation() {
-        try (Connection connection = DriverManager.getConnection("jdbc:mysql://localhost:3306/sakila", "root", "admin")) {
-            String query = "UPDATE tables SET guest_name = ?, begin_time = ?, end_time = ?, number_of_guests = ? WHERE table_number = ?";
+        try (Connection connection = getConnection()) {
+            String query = "UPDATE tables SET guest_name = ?, begin_time = ?, end_time = ?, number_of_guests = ?, reservation_count = ? WHERE table_number = ?";
             try (PreparedStatement preparedStatement = connection.prepareStatement(query)) {
                 preparedStatement.setString(1, guestName);
                 preparedStatement.setString(2, beginTime);
                 preparedStatement.setString(3, endTime);
                 preparedStatement.setInt(4, numberOfGuests);
-                preparedStatement.setInt(5, tableNumber);
+                preparedStatement.setInt(5, reservationCount); // Keep reservation count unchanged
+                preparedStatement.setInt(6, tableNumber);
                 int rowsAffected = preparedStatement.executeUpdate();
                 if (rowsAffected > 0) {
                     System.out.println("Table reservation updated successfully.");
@@ -118,7 +126,7 @@ public class Table {
     // Method to retrieve all reservations for a specific table
     public static List<Table> getAllReservations() {
         List<Table> reservations = new ArrayList<>();
-        try (Connection connection = DriverManager.getConnection("jdbc:mysql://localhost:3306/sakila", "root", "admin")) {
+        try (Connection connection = getConnection()) {
             String query = "SELECT * FROM tables";
             try (Statement statement = connection.createStatement();
                  ResultSet resultSet = statement.executeQuery(query)) {
@@ -128,13 +136,18 @@ public class Table {
                     String beginTime = resultSet.getString("begin_time");
                     String endTime = resultSet.getString("end_time");
                     int numberOfGuests = resultSet.getInt("number_of_guests");
-                    int reservationCount = resultSet.getInt("reservation_count"); // Assuming there is a column named reservation_count
-                    reservations.add(new Table(tableNumber, guestName, beginTime, endTime, numberOfGuests));
+                    int reservationCount = resultSet.getInt("reservation_count");
+                    reservations.add(new Table(tableNumber, guestName, beginTime, endTime, numberOfGuests, reservationCount));
                 }
             }
         } catch (SQLException e) {
             e.printStackTrace();
         }
         return reservations;
+    }
+
+    // Utility method to get connection
+    private static Connection getConnection() throws SQLException {
+        return DriverManager.getConnection("jdbc:mysql://localhost:3306/sakila", "root", "admin");
     }
 }

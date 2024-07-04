@@ -319,25 +319,58 @@ public class Resturant extends JPanel {
         LocalDateTime beginLocalDateTime = LocalDateTime.of(LocalDate.now(), begin);
         LocalDateTime endLocalDateTime = LocalDateTime.of(LocalDate.now(), end);
 
-        try {
-            PreparedStatement pstmt = connection.prepareStatement("INSERT INTO guests (name, email, phone, begin, end, guests, table_number) VALUES (?, ?, ?, ?, ?, ?, ?)");
-            pstmt.setString(1, name);
-            pstmt.setString(2, email);
-            pstmt.setString(3, phone);
-            pstmt.setTimestamp(4, Timestamp.valueOf(beginLocalDateTime));
-            pstmt.setTimestamp(5, Timestamp.valueOf(endLocalDateTime));
-            pstmt.setInt(6, Integer.parseInt(guests));
-            pstmt.setInt(7, tableNumber);
-            pstmt.executeUpdate();
+        try (Connection connection = DriverManager.getConnection("jdbc:mysql://localhost:3306/sakila", "root", "admin")) {
+            // Insert into guests table
+            String guestQuery = "INSERT INTO guests (name, email, phone, begin, end, guests, table_number) VALUES (?, ?, ?, ?, ?, ?, ?)";
+            try (PreparedStatement pstmtGuest = connection.prepareStatement(guestQuery, Statement.RETURN_GENERATED_KEYS)) {
+                pstmtGuest.setString(1, name);
+                pstmtGuest.setString(2, email);
+                pstmtGuest.setString(3, phone);
+                pstmtGuest.setTimestamp(4, Timestamp.valueOf(beginLocalDateTime));
+                pstmtGuest.setTimestamp(5, Timestamp.valueOf(endLocalDateTime));
+                pstmtGuest.setInt(6, Integer.parseInt(guests));
+                pstmtGuest.setInt(7, tableNumber);
 
-            JOptionPane.showMessageDialog(null, "Reservation for Table " + tableNumber + " made successfully!");
-            updateTableReservationCount(tableNumber); // Update the reservation count for the table
-            refreshSeatingPlan(); // Refresh the seating plan after making a reservation
+                int affectedRows = pstmtGuest.executeUpdate();
+
+                if (affectedRows > 0) {
+                    // Retrieve the generated guest_id
+                    try (ResultSet generatedKeys = pstmtGuest.getGeneratedKeys()) {
+                        if (generatedKeys.next()) {
+                            int guestId = generatedKeys.getInt(1);
+
+                            // Insert into tables table
+                            String updateQuery = "INSERT INTO tables (table_number, guest_name, begin_time, end_time, number_of_guests, guest_id, reservation_count) " +
+                                    "VALUES (?, ?, ?, ?, ?, ?, 1) " +
+                                    "ON DUPLICATE KEY UPDATE reservation_count = reservation_count + 1";
+                            try (PreparedStatement pstmtTable = connection.prepareStatement(updateQuery)) {
+                                pstmtTable.setInt(1, tableNumber);
+                                pstmtTable.setString(2, name); // Assuming costumer_name is derived from guest name
+                                pstmtTable.setTimestamp(3, Timestamp.valueOf(beginLocalDateTime));
+                                pstmtTable.setTimestamp(4, Timestamp.valueOf(endLocalDateTime));
+                                pstmtTable.setInt(5, Integer.parseInt(guests));
+                                pstmtTable.setInt(6, guestId);
+
+                                pstmtTable.executeUpdate();
+                            }
+
+                            JOptionPane.showMessageDialog(null, "Reservation for Table " + tableNumber + " made successfully!");
+                            refreshSeatingPlan(); // Refresh the seating plan after making a reservation
+                        } else {
+                            throw new SQLException("Creating guest failed, no ID obtained.");
+                        }
+                    }
+                } else {
+                    throw new SQLException("Creating guest failed, no rows affected.");
+                }
+            }
         } catch (SQLException ex) {
             ex.printStackTrace();
             JOptionPane.showMessageDialog(null, "Error making reservation: " + ex.getMessage(), "Database Error", JOptionPane.ERROR_MESSAGE);
         }
     }
+
+
 
     private void updateTableReservationCount(int tableNumber) {
         tableReservationCount.put(tableNumber, tableReservationCount.getOrDefault(tableNumber, 0) + 1);
@@ -610,11 +643,20 @@ public class Resturant extends JPanel {
     }
 
     private void deleteReservation(int guestId, int tableNumber) {
-        try {
+        try (Connection connection = DriverManager.getConnection("jdbc:mysql://localhost:3306/sakila", "root", "admin")) {
             // First, delete from the guests table
-            PreparedStatement pstmt1 = connection.prepareStatement("DELETE FROM guests WHERE id = ?");
-            pstmt1.setInt(1, guestId);
-            pstmt1.executeUpdate();
+            String deleteGuestQuery = "DELETE FROM guests WHERE id = ?";
+            try (PreparedStatement pstmt1 = connection.prepareStatement(deleteGuestQuery)) {
+                pstmt1.setInt(1, guestId);
+                pstmt1.executeUpdate();
+            }
+
+            // Second, delete from the tables table
+            String deleteTableQuery = "DELETE FROM tables WHERE guest_id = ?";
+            try (PreparedStatement pstmt2 = connection.prepareStatement(deleteTableQuery)) {
+                pstmt2.setInt(1, guestId);
+                pstmt2.executeUpdate();
+            }
 
             JOptionPane.showMessageDialog(null, "Reservation deleted successfully!");
             updateTableReservationCount(tableNumber); // Update the reservation count for the table
@@ -624,6 +666,7 @@ public class Resturant extends JPanel {
             JOptionPane.showMessageDialog(null, "Error deleting reservation: " + e.getMessage(), "Database Error", JOptionPane.ERROR_MESSAGE);
         }
     }
+
 
     private void refreshSeatingPlan() {
         // Remove all components from the seating panel and recreate the seating plan
