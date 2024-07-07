@@ -68,7 +68,6 @@ public class Resturant extends JPanel {
         });
         return button;
     }
-
     private void createSeatingPlan() {
         JPanel mainPanel = new JPanel(new BorderLayout()) {
             @Override
@@ -92,9 +91,27 @@ public class Resturant extends JPanel {
         seatingPanel.setBorder(BorderFactory.createEmptyBorder(18, 10, 10, 10));
         seatingPanel.setOpaque(false); // Make seating panel transparent
 
+        // Load table images
+        BufferedImage tableImage = null;
+        try {
+            tableImage = ImageIO.read(getClass().getResource("table.png"));
+        } catch (IOException ex) {
+            ex.printStackTrace();
+            JOptionPane.showMessageDialog(this, "Error loading table image: " + ex.getMessage(), "Image Loading Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
         for (int i = 1; i <= 18; i++) {
+            int reservationCount = getReservationCountForTable(i);
+
             try {
-                BufferedImage tableImage = ImageIO.read(getClass().getResource("table.png"));
+                // Adjust image based on reservation count
+                if (reservationCount >= 5) {
+                    tableImage = ImageIO.read(getClass().getResource("booked.jpg"));
+                } else {
+                    tableImage = ImageIO.read(getClass().getResource("table.png"));
+                }
+
                 tableImage = getScaledCircularImage(tableImage, 140); // Change size here
 
                 ImageIcon tableIcon = new ImageIcon(tableImage);
@@ -108,7 +125,7 @@ public class Resturant extends JPanel {
                 tableButton.setVerticalTextPosition(JButton.CENTER);
 
                 JLabel tableNumberLabel = new JLabel(Integer.toString(i));
-                tableNumberLabel.setForeground(new Color(224,224,224)); // Set color of numbers
+                tableNumberLabel.setForeground(new Color(224, 224, 224)); // Set color of numbers
                 tableNumberLabel.setHorizontalAlignment(JLabel.CENTER);
                 tableNumberLabel.setFont(new Font("SansSerif", Font.BOLD, 16)); // Example: Font size 16, bold
 
@@ -120,6 +137,11 @@ public class Resturant extends JPanel {
                 addTableButtonListener(tableButton, i);
 
                 seatingPanel.add(tablePanel);
+
+                // Disable button if table is fully reserved
+                if (reservationCount >= 5) {
+                    tableButton.setEnabled(false);
+                }
             } catch (IOException ex) {
                 ex.printStackTrace();
                 JOptionPane.showMessageDialog(this, "Error creating table: " + ex.getMessage(), "Table Creation Error", JOptionPane.ERROR_MESSAGE);
@@ -130,6 +152,24 @@ public class Resturant extends JPanel {
         mainPanel.add(seatingPanel, BorderLayout.CENTER);
         add(mainPanel, BorderLayout.CENTER);
     }
+
+    private int getReservationCountForTable(int tableNumber) {
+        try (Connection connection = DriverManager.getConnection("jdbc:mysql://localhost:3306/sakila", "root", "admin")) {
+            String query = "SELECT reservation_count FROM tables WHERE table_number = ?";
+            try (PreparedStatement pstmt = connection.prepareStatement(query)) {
+                pstmt.setInt(1, tableNumber);
+                ResultSet rs = pstmt.executeQuery();
+                if (rs.next()) {
+                    return rs.getInt("reservation_count");
+                }
+            }
+        } catch (SQLException ex) {
+            ex.printStackTrace();
+            JOptionPane.showMessageDialog(this, "Error fetching reservation count: " + ex.getMessage(), "Database Error", JOptionPane.ERROR_MESSAGE);
+        }
+        return 0; // Default to 0 if an error occurs
+    }
+
 
     private BufferedImage getScaledCircularImage(BufferedImage image, int size) {
         BufferedImage resizedImage = new BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB);
@@ -641,31 +681,75 @@ public class Resturant extends JPanel {
         editFrame.add(panel);
         animateFrameOpen(editFrame);
     }
-
     private void deleteReservation(int guestId, int tableNumber) {
         try (Connection connection = DriverManager.getConnection("jdbc:mysql://localhost:3306/sakila", "root", "admin")) {
-            // First, delete from the guests table
-            String deleteGuestQuery = "DELETE FROM guests WHERE id = ?";
-            try (PreparedStatement pstmt1 = connection.prepareStatement(deleteGuestQuery)) {
-                pstmt1.setInt(1, guestId);
-                pstmt1.executeUpdate();
-            }
+            connection.setAutoCommit(false);  // Start transaction
 
-            // Second, delete from the tables table
-            String deleteTableQuery = "DELETE FROM tables WHERE guest_id = ?";
-            try (PreparedStatement pstmt2 = connection.prepareStatement(deleteTableQuery)) {
-                pstmt2.setInt(1, guestId);
-                pstmt2.executeUpdate();
-            }
+            try {
+                // First, delete from the guests table
+                String deleteGuestQuery = "DELETE FROM guests WHERE id = ?";
+                try (PreparedStatement pstmt1 = connection.prepareStatement(deleteGuestQuery)) {
+                    pstmt1.setInt(1, guestId);
+                    int deletedRowsGuests = pstmt1.executeUpdate();
+                }
 
-            JOptionPane.showMessageDialog(null, "Reservation deleted successfully!");
-            updateTableReservationCount(tableNumber); // Update the reservation count for the table
-            refreshSeatingPlan(); // Refresh the seating plan after deleting a reservation
+                // Decrement the reservation count for the table in the tables table
+                decrementTableReservationCount(connection, tableNumber);
+
+                connection.commit();  // Commit transaction
+
+                JOptionPane.showMessageDialog(null, "Reservation deleted successfully!");
+                refreshSeatingPlan(); // Refresh the seating plan after deleting a reservation
+            } catch (SQLException e) {
+                connection.rollback();  // Rollback transaction in case of error
+                e.printStackTrace();
+                JOptionPane.showMessageDialog(null, "Error deleting reservation: " + e.getMessage(), "Database Error", JOptionPane.ERROR_MESSAGE);
+            }
         } catch (SQLException e) {
             e.printStackTrace();
-            JOptionPane.showMessageDialog(null, "Error deleting reservation: " + e.getMessage(), "Database Error", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(null, "Error connecting to database: " + e.getMessage(), "Database Error", JOptionPane.ERROR_MESSAGE);
         }
     }
+
+
+
+
+    private void decrementTableReservationCount(Connection connection, int tableNumber) throws SQLException {
+        String selectQuery = "SELECT reservation_count FROM tables WHERE table_number = ?";
+        String decrementQuery = "UPDATE tables SET reservation_count = GREATEST(reservation_count - 1, 0) WHERE table_number = ?";
+
+        try (PreparedStatement selectStmt = connection.prepareStatement(selectQuery)) {
+            selectStmt.setInt(1, tableNumber);
+
+            try (ResultSet rs = selectStmt.executeQuery()) {
+                if (rs.next()) {
+                    int currentCount = rs.getInt("reservation_count");
+
+                    if (currentCount > 0) {
+                        try (PreparedStatement decrementStmt = connection.prepareStatement(decrementQuery)) {
+                            decrementStmt.setInt(1, tableNumber);
+                            int rowsAffected = decrementStmt.executeUpdate();
+
+                            if (rowsAffected == 0) {
+                                throw new SQLException("Failed to decrement reservation count for table number " + tableNumber);
+                            } else {
+                                System.out.println("Reservation count decremented successfully for table number " + tableNumber);
+                            }
+                        }
+                    } else {
+                        throw new SQLException("Reservation count for table number " + tableNumber + " is already zero.");
+                    }
+                } else {
+                    throw new SQLException("Table number " + tableNumber + " not found or no reservation exists.");
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("Error in decrementTableReservationCount: " + e.getMessage());
+            e.printStackTrace();
+            throw e; // rethrow the exception to handle it at the higher level
+        }
+    }
+
 
 
     private void refreshSeatingPlan() {
